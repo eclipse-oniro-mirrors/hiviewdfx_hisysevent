@@ -81,39 +81,3 @@ ohos_shared_library("libhisysevent") {
     defines += [ "HIVIEWDFX_HITRACE_ENABLED" ]
   }
 }
-
-ohos_static_library("hisysevent_static_lib_for_tdd") {
-  configs = [ ":hisysevent_config" ]
-
-  public_configs = [ ":hisysevent_config" ]
-
-  sources = [
-    "encoded_param.cpp",
-    "event_socket_factory.cpp",
-    "hisysevent.cpp",
-    "hisysevent_c.cpp",
-    "raw_data.cpp",
-    "raw_data_base_def.cpp",
-    "raw_data_encoder.cpp",
-    "stringfilter.cpp",
-    "transport.cpp",
-    "write_controller.cpp",
-  ]
-
-  output_name = "hisysevent_static_lib_for_tdd"
-
-  part_name = "hisysevent"
-
-  subsystem_name = "hiviewdfx"
-
-  external_deps = [
-    "bounds_checking_function:libsec_shared",
-    "hilog:libhilog",
-  ]
-
-  defines = []
-  if (hiviewdfx_hitrace_enabaled) {
-    external_deps += [ "hitrace:libhitracechain" ]
-    defines += [ "HIVIEWDFX_HITRACE_ENABLED" ]
-  }
-}

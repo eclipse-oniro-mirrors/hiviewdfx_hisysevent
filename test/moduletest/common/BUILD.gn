@@ -39,8 +39,8 @@ ohos_moduletest("HiSysEventAdapterNativeTest") {
   deps = [
     "../../../adapter/native/idl:sys_event_impl_client",
     "../../../frameworks/native/util:hisysevent_util",
-    "../../../interfaces/native/innerkits/hisysevent:hisysevent_static_lib_for_tdd",
-    "../../../interfaces/native/innerkits/hisysevent_manager:hisyseventmanager_static_lib_for_tdd",
+    "../../../test:hisysevent_static_lib_for_tdd",
+    "../../../test:hisyseventmanager_static_lib_for_tdd",
   ]
 
   if (is_standard_system) {
@@ -76,8 +76,8 @@ ohos_moduletest("HiSysEventNativeTest") {
 
   deps = [
     "../../../adapter/native/idl:sys_event_impl_client",
-    "../../../interfaces/native/innerkits/hisysevent:hisysevent_static_lib_for_tdd",
-    "../../../interfaces/native/innerkits/hisysevent_manager:hisyseventmanager_static_lib_for_tdd",
+    "../../../test:hisysevent_static_lib_for_tdd",
+    "../../../test:hisyseventmanager_static_lib_for_tdd",
   ]
 
   if (is_standard_system) {
@@ -107,7 +107,7 @@ ohos_moduletest("HiSysEventCTest") {
 
   configs = [ ":hisysevent_native_test_config" ]
 
-  deps = [ "../../../interfaces/native/innerkits/hisysevent:hisysevent_static_lib_for_tdd" ]
+  deps = [ "../../../test:hisysevent_static_lib_for_tdd" ]
 
   external_deps = [ "hilog:libhilog" ]
 
@@ -130,7 +130,7 @@ ohos_moduletest("HiSysEventManagerCTest") {
 
   deps = [
     "../../../frameworks/native/util:hisysevent_util",
-    "../../../interfaces/native/innerkits/hisysevent_manager:hisyseventmanager_static_lib_for_tdd",
+    "../../../test:hisyseventmanager_static_lib_for_tdd",
   ]
 
   external_deps = [ "hilog:libhilog" ]
@@ -154,7 +154,7 @@ ohos_moduletest("HiSysEventDelayTest") {
 
   deps = [
     "../../../frameworks/native/util:hisysevent_util",
-    "../../../interfaces/native/innerkits/hisysevent:hisysevent_static_lib_for_tdd",
+    "../../../test:hisysevent_static_lib_for_tdd",
   ]
 
   external_deps = [
@@ -181,8 +181,8 @@ ohos_moduletest("HiSysEventWroteResultCheckTest") {
 
   deps = [
     "../../../frameworks/native/util:hisysevent_util",
-    "../../../interfaces/native/innerkits/hisysevent:hisysevent_static_lib_for_tdd",
-    "../../../interfaces/native/innerkits/hisysevent_manager:hisyseventmanager_static_lib_for_tdd",
+    "../../../test:hisysevent_static_lib_for_tdd",
+    "../../../test:hisyseventmanager_static_lib_for_tdd",
   ]
 
   external_deps = [ "hilog:libhilog" ]
@@ -212,7 +212,7 @@ ohos_moduletest("HiSysEventEncodedTest") {
 
   deps = [
     "../../../frameworks/native/util:hisysevent_util",
-    "../../../interfaces/native/innerkits/hisysevent:hisysevent_static_lib_for_tdd",
+    "../../../test:hisysevent_static_lib_for_tdd",
   ]
 
   external_deps = [ "hilog:libhilog" ]
