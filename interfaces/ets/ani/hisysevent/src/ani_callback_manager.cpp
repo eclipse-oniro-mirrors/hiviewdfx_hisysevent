@@ -32,75 +32,89 @@ constexpr int RELEASE_FUNC_INDEX = 2;
 void RunCallback(ani_vm *vm, CallbackContextAni *context,
     std::tuple<CallbackContextAni*, CALLBACK_FUNC, RELEASE_FUNC>& current)
 {
-    context->callback = std::get<CALLBACK_FUNC_INDEX>(current);
-    context->release = std::get<RELEASE_FUNC_INDEX>(current);
-    if (context->callback != nullptr) {
-        context->callback(vm, context->ref, context->threadId);
+    auto callback = std::get<CALLBACK_FUNC_INDEX>(current);
+    auto release = std::get<RELEASE_FUNC_INDEX>(current);
+    if (callback != nullptr) {
+        callback(vm, context->ref, context->threadId);
     }
-    if (context->release != nullptr) {
-        context->release(vm, context->threadId);
+    if (release != nullptr) {
+        release(vm, context->threadId);
     }
 }
 
 void AniCallbackManager::Add(CallbackContextAni *context, CALLBACK_FUNC callback,
     RELEASE_FUNC release)
 {
+    ani_vm *vm = nullptr;
     {
-        if (IsReleased.load(std::memory_order_acquire)) {
+        std::lock_guard<std::mutex> lock(managerMutex);
+        if (isReleased.load(std::memory_order_acquire)) {
             return;
         }
-        std::lock_guard<std::mutex> lock(managerMutex);
-        AniCallbacks.emplace(std::make_tuple(context, callback, [this, release, context] (ani_vm*, pid_t threadId) {
+        vm = context->vm;
+        AniCallbacks.emplace(std::make_tuple(context, callback, [this, release, vm] (ani_vm*, pid_t threadId) {
             if (release == nullptr) {
-                this->ImmediateRun(context->vm, true);
+                this->ImmediateRun(vm, true);
             } else {
                 // Destructor of JsCallbackManager will be called in release callback,
                 // so no need to call next callback in queue.
-                release(context->vm, threadId);
+                release(vm, threadId);
             }
         }));
         if (inCalling.load(std::memory_order_acquire)) {
             return;
         }
+        inCalling = true;
     }
-    ImmediateRun(context->vm);
+    ImmediateRun(vm);
 }
 
 void AniCallbackManager::Release()
 {
-    IsReleased = true;
-    Clear(AniCallbacks);
+    {
+        std::lock_guard<std::mutex> lock(managerMutex);
+        isReleased = true;
+        Clear(AniCallbacks);
+        inCalling = false;
+    }
+    std::unique_lock<std::mutex> lock(drainMutex);
+    drainCond.wait(lock, [this] {
+        return inFlightCallbacks.load(std::memory_order_acquire) == 0;
+    });
 }
 
 void AniCallbackManager::ImmediateRun(ani_vm *vm, bool needPop)
 {
-    inCalling = true;
     std::tuple<CallbackContextAni*, CALLBACK_FUNC, RELEASE_FUNC> current;
-    CallbackContextAni *context;
+    CallbackContextAni *context = nullptr;
     {
-        if (IsReleased.load(std::memory_order_acquire)) {
+        std::lock_guard<std::mutex> lock(managerMutex);
+        if (isReleased.load(std::memory_order_acquire)) {
+            inCalling = false;
             return;
         }
-        std::lock_guard<std::mutex> lock(managerMutex);
         if (needPop && !AniCallbacks.empty()) {
             AniCallbacks.pop();
         }
 
-        if (AniCallbacks.empty() && !IsReleased.load(std::memory_order_acquire)) {
+        if (AniCallbacks.empty()) {
             inCalling = false;
             return;
         }
         current = AniCallbacks.front();
         context = std::get<CONTEXT_INDEX>(current);
-        if (context == nullptr || IsReleased.load(std::memory_order_acquire)) {
+        if (context == nullptr) {
             inCalling = false;
             return;
         }
-    }
-    if (IsReleased.load(std::memory_order_acquire)) {
-        return;
+
+        inFlightCallbacks.fetch_add(1, std::memory_order_acq_rel);
     }
     RunCallback(vm, context, current);
+    if (inFlightCallbacks.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+        std::lock_guard<std::mutex> lock(drainMutex);
+        drainCond.notify_all();
+    }
 }
 
 void AniCallbackManager::Clear(TaskQueue& tasks)

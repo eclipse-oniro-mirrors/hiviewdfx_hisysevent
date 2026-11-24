@@ -115,7 +115,6 @@ int HiSysEventRemoveWatcher(HiSysEventRustWatcherC* watcher)
         return ERR_LISTENER_NOT_EXIST;
     }
     auto watcherKey = std::make_pair(watcher->onEventRustCb, watcher->onServiceDiedRustCb);
-    std::pair<OnRustCb, OnRustCb> callbackKey;
     std::shared_ptr<HiSysEventBaseListener> callbackPtr = nullptr;
     {
         std::lock_guard<std::mutex> lock(g_baseWatchersMutex);
@@ -123,17 +122,10 @@ int HiSysEventRemoveWatcher(HiSysEventRustWatcherC* watcher)
         if (watcherIter == g_baseWatchers.end()) {
             return ERR_LISTENER_NOT_EXIST;
         }
-        callbackKey = watcherIter->first;
         callbackPtr = watcherIter->second;
+        g_baseWatchers.erase(watcherIter);
     }
     auto ret = HiSysEventBaseManager::RemoveListener(callbackPtr);
-    if (ret != IPC_CALL_SUCCEED) {
-        return ret;
-    }
-    {
-        std::lock_guard<std::mutex> lock(g_baseWatchersMutex);
-        g_baseWatchers.erase(callbackKey);
-    }
     return ret;
 }
 

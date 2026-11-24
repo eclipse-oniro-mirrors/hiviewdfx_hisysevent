@@ -30,14 +30,61 @@ namespace {
 constexpr int CONTEXT_INDEX = 0;
 constexpr int CALLBACK_FUNC_INDEX = 1;
 constexpr int RELEASE_FUNC_INDEX = 2;
+struct CallbackWorkData {
+    std::shared_ptr<CallbackContext> context;
+    CALLBACK_FUNC callback;
+    RELEASE_FUNC release;
+};
 void DeleteWork(uv_work_t* work)
 {
     if (work != nullptr) {
+        delete reinterpret_cast<CallbackWorkData*>(work->data);
+        work->data = nullptr;
         delete work;
     }
 }
 
-void RunCallback(CallbackContext* context, std::tuple<CallbackContext*, CALLBACK_FUNC, RELEASE_FUNC>& current)
+void OnWorkExecute(uv_work_t* work)
+{
+    HILOG_DEBUG(LOG_CORE, "enter uv work callback.");
+}
+
+void OnWorkDone(uv_work_t* work, int status)
+{
+    if (work == nullptr) {
+        return;
+    }
+    auto* data = reinterpret_cast<CallbackWorkData*>(work->data);
+    if (data == nullptr) {
+        HILOG_ERROR(LOG_CORE, "uv work data is invalid.");
+        DeleteWork(work);
+        return;
+    }
+    auto context = data->context;
+    if (context == nullptr || context->env == nullptr) {
+        HILOG_ERROR(LOG_CORE, "napi environment is invalid.");
+        DeleteWork(work);
+        return;
+    }
+    napi_handle_scope scope = nullptr;
+    napi_open_handle_scope(context->env, &scope);
+    if (scope == nullptr) {
+        HILOG_ERROR(LOG_CORE, "napi scope is null.");
+        DeleteWork(work);
+        return;
+    }
+    if (data->callback != nullptr) {
+        data->callback(context->env, context->ref, context->threadId);
+    }
+    napi_close_handle_scope(context->env, scope);
+    if (data->release != nullptr) {
+        data->release(context->threadId);
+    }
+    DeleteWork(work);
+}
+
+void RunCallback(std::shared_ptr<CallbackContext> context,
+    std::tuple<std::shared_ptr<CallbackContext>, CALLBACK_FUNC, RELEASE_FUNC>& current)
 {
     uv_loop_t* loop = nullptr;
     napi_get_uv_event_loop(context->env, &loop);
@@ -45,59 +92,34 @@ void RunCallback(CallbackContext* context, std::tuple<CallbackContext*, CALLBACK
         HILOG_ERROR(LOG_CORE, "failed to get uv_loop.");
         return;
     }
-    context->callback = std::get<CALLBACK_FUNC_INDEX>(current);
-    context->release = std::get<RELEASE_FUNC_INDEX>(current);
     uv_work_t* work = new(std::nothrow) uv_work_t();
     if (work == nullptr) {
         HILOG_ERROR(LOG_CORE, "uv_work new failed, no memory left.");
         return;
     }
-    work->data = reinterpret_cast<void*>(context);
-    uv_queue_work_with_qos(
-        loop,
-        work,
-        [] (uv_work_t* work) {
-            HILOG_DEBUG(LOG_CORE, "enter uv work callback.");
-        },
-        [] (uv_work_t* work, int status) {
-            if (work == nullptr || work->data == nullptr) {
-                HILOG_ERROR(LOG_CORE, "uv work is invalid.");
-                DeleteWork(work);
-                return;
-            }
-            CallbackContext* context = reinterpret_cast<CallbackContext*>(work->data);
-            if (context == nullptr || context->env == nullptr) {
-                HILOG_ERROR(LOG_CORE, "napi environment is invalid.");
-                DeleteWork(work);
-                return;
-            }
-            napi_handle_scope scope = nullptr;
-            napi_open_handle_scope(context->env, &scope);
-            if (scope == nullptr) {
-                HILOG_ERROR(LOG_CORE, "napi scope is null.");
-                DeleteWork(work);
-                return;
-            }
-            if (context->callback != nullptr) {
-                context->callback(context->env, context->ref, context->threadId);
-            }
-            napi_close_handle_scope(context->env, scope);
-            DeleteWork(work);
-            if (context->release != nullptr) {
-                context->release(context->threadId);
-            }
-        }, uv_qos_default);
+    auto* data = new(std::nothrow) CallbackWorkData{
+        context,
+        std::get<CALLBACK_FUNC_INDEX>(current),
+        std::get<RELEASE_FUNC_INDEX>(current)
+    };
+    if (data == nullptr) {
+        HILOG_ERROR(LOG_CORE, "callback work data new failed, no memory left.");
+        DeleteWork(work);
+        return;
+    }
+    work->data = reinterpret_cast<void*>(data);
+    uv_queue_work_with_qos(loop, work, OnWorkExecute, OnWorkDone, uv_qos_default);
 }
 }
 
-void JsCallbackManager::Add(CallbackContext* context, CALLBACK_FUNC callback,
+void JsCallbackManager::Add(std::shared_ptr<CallbackContext> context, CALLBACK_FUNC callback,
     RELEASE_FUNC release)
 {
     {
-        if (IsReleased.load(std::memory_order_acquire)) {
+        std::lock_guard<std::mutex> lock(managerMutex);
+        if (isReleased.load(std::memory_order_acquire)) {
             return;
         }
-        std::lock_guard<std::mutex> lock(managerMutex);
         jsCallbacks.emplace(std::make_tuple(context, callback, [this, release] (pid_t threadId) {
             if (release == nullptr) {
                 this->ImmediateRun(true);
@@ -110,42 +132,43 @@ void JsCallbackManager::Add(CallbackContext* context, CALLBACK_FUNC callback,
         if (inCalling.load(std::memory_order_acquire)) {
             return;
         }
+        inCalling = true;
     }
     ImmediateRun();
 }
 
 void JsCallbackManager::Release()
 {
-    IsReleased = true;
+    std::lock_guard<std::mutex> lock(managerMutex);
+    isReleased = true;
     Clear(jsCallbacks);
+    inCalling = false;
 }
 
 void JsCallbackManager::ImmediateRun(bool needPop)
 {
     inCalling = true;
-    std::tuple<CallbackContext*, CALLBACK_FUNC, RELEASE_FUNC> current;
-    CallbackContext* context;
+    std::tuple<std::shared_ptr<CallbackContext>, CALLBACK_FUNC, RELEASE_FUNC> current;
+    std::shared_ptr<CallbackContext> context;
     {
-        if (IsReleased.load(std::memory_order_acquire)) {
+        std::lock_guard<std::mutex> lock(managerMutex);
+        if (isReleased.load(std::memory_order_acquire)) {
+            inCalling = false;
             return;
         }
-        std::lock_guard<std::mutex> lock(managerMutex);
         if (needPop && !jsCallbacks.empty()) {
             jsCallbacks.pop();
         }
-        if (jsCallbacks.empty() && !IsReleased.load(std::memory_order_acquire)) {
+        if (jsCallbacks.empty()) {
             inCalling = false;
             return;
         }
         current = jsCallbacks.front();
         context = std::get<CONTEXT_INDEX>(current);
-        if (context == nullptr || IsReleased.load(std::memory_order_acquire)) {
+        if (context == nullptr) {
             inCalling = false;
             return;
         }
-    }
-    if (IsReleased.load(std::memory_order_acquire)) {
-        return;
     }
     RunCallback(context, current);
 }

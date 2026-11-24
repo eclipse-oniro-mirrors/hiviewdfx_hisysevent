@@ -16,6 +16,7 @@
 #ifndef NAPI_HISYSEVENT_LISTENER_H
 #define NAPI_HISYSEVENT_LISTENER_H
 
+#include <memory>
 #include <string>
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -30,7 +31,7 @@ namespace OHOS {
 namespace HiviewDFX {
 class NapiHiSysEventListener : public HiSysEventBaseListener {
 public:
-    NapiHiSysEventListener(CallbackContext* context);
+    NapiHiSysEventListener(std::shared_ptr<CallbackContext> context);
     virtual ~NapiHiSysEventListener();
 
 public:
@@ -39,7 +40,7 @@ public:
     virtual void OnServiceDied() override;
 
 private:
-    CallbackContext* callbackContext;
+    std::shared_ptr<CallbackContext> callbackContext;
     std::shared_ptr<JsCallbackManager> jsCallbackManager;
 
 friend class HiSysEventManager;

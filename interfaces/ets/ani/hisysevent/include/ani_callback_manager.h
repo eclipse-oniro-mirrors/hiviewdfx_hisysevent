@@ -40,9 +40,12 @@ private:
 
 private:
     std::atomic<bool> inCalling = false;
-    std::atomic<bool> IsReleased = false;
+    std::atomic<bool> isReleased = false;
     std::mutex managerMutex;
     TaskQueue AniCallbacks;
+    std::atomic<int> inFlightCallbacks = 0;
+    std::mutex drainMutex;
+    std::condition_variable drainCond;
 };
 } // namespace HiviewDFX
 } // namespace OHOS

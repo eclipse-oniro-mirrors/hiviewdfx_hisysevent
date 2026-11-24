@@ -17,6 +17,7 @@
 #define NAPI_HISYSEVENT_QUERIER_H
 
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 #include <sys/syscall.h>
@@ -33,7 +34,7 @@ namespace HiviewDFX {
 using ON_COMPLETE_FUNC = std::function<void(const napi_env, const napi_ref)>;
 class NapiHiSysEventQuerier : public HiSysEventBaseQueryCallback {
 public:
-    NapiHiSysEventQuerier(CallbackContext* context, ON_COMPLETE_FUNC handler);
+    NapiHiSysEventQuerier(std::shared_ptr<CallbackContext> context, ON_COMPLETE_FUNC handler);
     virtual ~NapiHiSysEventQuerier();
 
 public:
@@ -42,7 +43,7 @@ public:
     virtual void OnComplete(int32_t reason, int32_t total, int64_t seq) override;
 
 private:
-    CallbackContext* callbackContext;
+    std::shared_ptr<CallbackContext> callbackContext;
     ON_COMPLETE_FUNC onCompleteHandler;
     std::shared_ptr<JsCallbackManager> jsCallbackManager;
 };

@@ -87,11 +87,11 @@ int HiSysEventAddWatcher(HiSysEventWatcher& watcher, HiSysEventWatchRule rules[]
     }
     auto listenerC = std::make_shared<HiSysEventBaseListener>(
         std::make_shared<HiSysEventListenerC>(watcher.OnEvent, watcher.OnServiceDied));
+    std::lock_guard<std::mutex> lock(g_mapMutex);
     auto ret = HiSysEventBaseManager::AddListener(listenerC, listenerRules);
     if (ret != IPC_CALL_SUCCEED) {
         return ret;
     }
-    std::lock_guard<std::mutex> lock(g_mapMutex);
     watchers[std::make_pair(watcher.OnEvent, watcher.OnServiceDied)] = listenerC;
     return ret;
 }
