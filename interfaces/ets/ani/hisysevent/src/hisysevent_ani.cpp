@@ -621,17 +621,18 @@ void HiSysEventAni::RemoveWatcher(ani_env *env, ani_object watcher)
             "System api can be invoked only by system applications.");
         return;
     }
-    std::unordered_map<ani_ref, std::pair<pid_t, std::shared_ptr<AniHiSysEventListener>>>::iterator iter;
     std::shared_ptr<AniHiSysEventListener> listenerPtr = nullptr;
+    ani_ref listenerKey = nullptr;
     {
         std::lock_guard<std::mutex> lock(g_listenerMapMutex);
-        iter = HiSysEventAniUtil::CompareAndReturnCacheItem<AniHiSysEventListener>(env, watcher, listeners);
+        auto iter = HiSysEventAniUtil::CompareAndReturnCacheItem<AniHiSysEventListener>(env, watcher, listeners);
         if (iter == listeners.end()) {
             HILOG_ERROR(LOG_CORE, "listener not exist.");
             HiSysEventAniUtil::ThrowErrorByRet(env, ERR_ANI_LISTENER_NOT_FOUND);
             return;
         }
         listenerPtr = iter->second.second;
+        listenerKey = iter->first;
     }
     if (auto ret = HiSysEventBaseManager::RemoveListener(listenerPtr); ret != ANI_SUCCESS) {
         HILOG_ERROR(LOG_CORE, "failed to remove event listener, result code is %{public}d.", ret);
@@ -639,7 +640,7 @@ void HiSysEventAni::RemoveWatcher(ani_env *env, ani_object watcher)
         return;
     }
     std::lock_guard<std::mutex> lock(g_listenerMapMutex);
-    listeners.erase(iter);
+    listeners.erase(listenerKey);
 }
 
 void HiSysEventAni::Query(ani_env *env, ani_object queryArgAni, ani_array rulesAni, ani_object querierAni)

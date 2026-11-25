@@ -159,7 +159,7 @@ static napi_value AddWatcher(napi_env env, napi_callback_info info)
         HILOG_ERROR(LOG_CORE, "failed to parse watch rules, result code is %{public}d.", ret);
         return nullptr;
     }
-    CallbackContext* callbackContext = new CallbackContext();
+    auto callbackContext = std::make_shared<CallbackContext>();
     callbackContext->env = env;
     callbackContext->threadId = getproctid();
     napi_create_reference(env, params[ADD_LISTENER_LISTENER_PARAM_INDEX], 1, &callbackContext->ref);
@@ -252,7 +252,7 @@ static napi_value Query(napi_env env, napi_callback_info info)
         HILOG_ERROR(LOG_CORE, "querier is null or undefined.");
         return nullptr;
     }
-    CallbackContext* callbackContext = new CallbackContext();
+    auto callbackContext = std::make_shared<CallbackContext>();
     callbackContext->env = env;
     callbackContext->threadId = getproctid();
     napi_create_reference(env, params[QUERY_QUERIER_PARAM_INDEX], 1, &callbackContext->ref);

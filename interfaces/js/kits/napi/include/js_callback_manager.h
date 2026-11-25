@@ -17,6 +17,7 @@
 #define JS_CALLBACK_MANAGER_H
 
 #include <atomic>
+#include <memory>
 #include <mutex>
 #include <queue>
 #include <tuple>
@@ -27,12 +28,12 @@
 
 namespace OHOS {
 namespace HiviewDFX {
-using TaskQueue = std::queue<std::tuple<CallbackContext*, CALLBACK_FUNC, RELEASE_FUNC>>;
+using TaskQueue = std::queue<std::tuple<std::shared_ptr<CallbackContext>, CALLBACK_FUNC, RELEASE_FUNC>>;
 class JsCallbackManager final {
 public:
     explicit JsCallbackManager() {}
 public:
-    void Add(CallbackContext* context, CALLBACK_FUNC callback, RELEASE_FUNC release = nullptr);
+    void Add(std::shared_ptr<CallbackContext> context, CALLBACK_FUNC callback, RELEASE_FUNC release = nullptr);
     void Release();
 
 private:
@@ -41,7 +42,7 @@ private:
 
 private:
     std::atomic<bool> inCalling = false;
-    std::atomic<bool> IsReleased = false;
+    std::atomic<bool> isReleased = false;
     std::mutex managerMutex;
     TaskQueue jsCallbacks;
 };

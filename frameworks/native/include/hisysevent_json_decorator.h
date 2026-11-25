@@ -41,19 +41,18 @@ public:
 
 private:
     bool CheckAttrDecorationNeed(const Json::Value& eventJson, const std::string& key,
-        const Json::Value& standard);
+        const Json::Value& standard, DecorateMarks& marks);
     Validity CheckAttrValidity(const Json::Value& eventJson, const std::string& key,
         const Json::Value& standard);
     Validity CheckLevelValidity(const Json::Value& baseInfo);
     bool CheckEventDecorationNeed(const Json::Value& eventJson, BaseInfoHandler baseJsonInfoHandler,
         ExtensiveInfoHander extensiveJsonInfoHandler);
     std::string Decorate(Validity validity, std::string& key, std::string& value);
-    std::string DecorateJsonStr(const std::string& standard, DecorateMarks marks);
+    std::string DecorateJsonStr(const std::string& standard, const DecorateMarks& marks);
     bool JudgeDataType(const std::string& dataType, const Json::Value& eventJson);
 
 private:
     Json::Value jsonRoot_;
-    DecorateMarks decoratedMarks_;
     bool isJsonRootValid_ = false;
 };
 } // namespace HiviewDFX

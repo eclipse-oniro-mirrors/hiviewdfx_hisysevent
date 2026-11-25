@@ -33,7 +33,7 @@ constexpr size_t ON_EVENT_PARAM_COUNT = 1;
 constexpr size_t ON_SERVICE_DIED_PARAM_COUNT = 0;
 }
 
-NapiHiSysEventListener::NapiHiSysEventListener(CallbackContext* context)
+NapiHiSysEventListener::NapiHiSysEventListener(std::shared_ptr<CallbackContext> context)
 {
     callbackContext = context;
     jsCallbackManager = std::make_shared<JsCallbackManager>();
@@ -44,17 +44,14 @@ NapiHiSysEventListener::~NapiHiSysEventListener()
     if (jsCallbackManager != nullptr) {
         jsCallbackManager->Release();
     }
-    if (callbackContext->threadId == getproctid()) {
-        napi_delete_reference(callbackContext->env, callbackContext->ref);
-    }
-    delete callbackContext;
+    callbackContext.reset();
 }
 
 void NapiHiSysEventListener::OnEvent(const std::string& domain, const std::string& eventName, const int eventType,
     const std::string& eventDetail)
 {
     jsCallbackManager->Add(callbackContext,
-        [this, domain, eventName, eventType, eventDetail] (const napi_env env, const napi_ref ref, pid_t threadId) {
+        [domain, eventName, eventType, eventDetail] (const napi_env env, const napi_ref ref, pid_t threadId) {
             if (threadId != getproctid()) {
                 return;
             }
@@ -78,7 +75,7 @@ void NapiHiSysEventListener::OnEvent(const std::string& domain, const std::strin
 void NapiHiSysEventListener::OnServiceDied()
 {
     jsCallbackManager->Add(callbackContext,
-        [this] (const napi_env env, const napi_ref ref, pid_t threadId) {
+        [] (const napi_env env, const napi_ref ref, pid_t threadId) {
             if (threadId != getproctid()) {
                 return;
             }

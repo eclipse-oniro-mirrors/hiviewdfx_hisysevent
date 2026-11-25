@@ -33,7 +33,7 @@ constexpr size_t ON_QUERY_PARAM_COUNT = 1;
 constexpr size_t ON_QUERY_COMPLTE_COUNT = 3;
 }
 
-NapiHiSysEventQuerier::NapiHiSysEventQuerier(CallbackContext* context, ON_COMPLETE_FUNC handler)
+NapiHiSysEventQuerier::NapiHiSysEventQuerier(std::shared_ptr<CallbackContext> context, ON_COMPLETE_FUNC handler)
 {
     callbackContext = context;
     onCompleteHandler = handler;
@@ -45,17 +45,14 @@ NapiHiSysEventQuerier::~NapiHiSysEventQuerier()
     if (jsCallbackManager != nullptr) {
         jsCallbackManager->Release();
     }
-    if (callbackContext->threadId == getproctid()) {
-        napi_delete_reference(callbackContext->env, callbackContext->ref);
-    }
-    delete callbackContext;
+    callbackContext.reset();
 }
 
 void NapiHiSysEventQuerier::OnQuery(const std::vector<std::string>& sysEvents,
     const std::vector<int64_t>& seq)
 {
     jsCallbackManager->Add(callbackContext,
-        [this, sysEvents, seq] (const napi_env env, const napi_ref ref, pid_t threadId) {
+        [sysEvents, seq] (const napi_env env, const napi_ref ref, pid_t threadId) {
             if (threadId != getproctid()) {
                 return;
             }
@@ -78,7 +75,7 @@ void NapiHiSysEventQuerier::OnQuery(const std::vector<std::string>& sysEvents,
 void NapiHiSysEventQuerier::OnComplete(int32_t reason, int32_t total, int64_t seq)
 {
     jsCallbackManager->Add(callbackContext,
-        [this, reason, total, seq] (const napi_env env, const napi_ref ref, pid_t threadId) {
+        [reason, total, seq] (const napi_env env, const napi_ref ref, pid_t threadId) {
             if (threadId != getproctid()) {
                 return;
             }
@@ -98,12 +95,12 @@ void NapiHiSysEventQuerier::OnComplete(int32_t reason, int32_t total, int64_t se
             if (status != napi_ok) {
                 HILOG_ERROR(LOG_CORE, "failed to call OnComplete JS function.");
             }
-        }, [this] (pid_t threadId) {
+        }, [handler = this->onCompleteHandler, context = this->callbackContext] (pid_t threadId) {
             if (threadId != getproctid()) {
                 return;
             }
-            if (this->onCompleteHandler != nullptr && this->callbackContext != nullptr) {
-                this->onCompleteHandler(this->callbackContext->env, this->callbackContext->ref);
+            if (handler != nullptr && context != nullptr) {
+                handler(context->env, context->ref);
             }
         });
 }

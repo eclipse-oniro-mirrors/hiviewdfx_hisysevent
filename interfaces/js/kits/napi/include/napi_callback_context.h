@@ -12,12 +12,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- 
+
 #ifndef NAPI_CALLBACK_CONTEXT_H
 #define NAPI_CALLBACK_CONTEXT_H
 
 #include <functional>
+#include <memory>
 #include <sys/syscall.h>
+#include <unistd.h>
 
 #include "napi/native_api.h"
 #include "napi/native_node_api.h"
@@ -29,9 +31,18 @@ using RELEASE_FUNC = std::function<void(pid_t threadId)>;
 struct CallbackContext {
     napi_env env = nullptr;
     napi_ref ref = nullptr;
-    CALLBACK_FUNC callback;
-    RELEASE_FUNC release;
-    pid_t threadId;
+    pid_t threadId = 0;
+    CallbackContext() = default;
+    ~CallbackContext()
+    {
+        if (threadId == getproctid() && env != nullptr && ref != nullptr) {
+            napi_delete_reference(env, ref);
+        }
+    }
+    CallbackContext(const CallbackContext&) = delete;
+    CallbackContext& operator=(const CallbackContext&) = delete;
+    CallbackContext(CallbackContext&&) = delete;
+    CallbackContext& operator=(CallbackContext&&) = delete;
 };
 } // namespace HiviewDFX
 } // namespace OHOS

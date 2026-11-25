@@ -71,10 +71,10 @@ HiSysEventJsonDecorator::HiSysEventJsonDecorator()
 }
 
 bool HiSysEventJsonDecorator::CheckAttrDecorationNeed(const Json::Value& eventJson, const std::string& key,
-    const Json::Value& standard)
+    const Json::Value& standard, DecorateMarks& marks)
 {
     auto ret = CheckAttrValidity(eventJson, key, standard);
-    decoratedMarks_[key] = ret;
+    marks[key] = ret;
     return ret != Validity::KV_BOTH_VALID;
 }
 
@@ -173,7 +173,6 @@ std::string HiSysEventJsonDecorator::Decorate(Validity validity, std::string& ke
 std::string HiSysEventJsonDecorator::DecorateEventJsonStr(const HiSysEventRecord& record)
 {
     std::string origin = record.AsJson();
-    decoratedMarks_.clear(); // reset marked keys.
     if (!isJsonRootValid_) {
         HILOG_ERROR(LOG_CORE, "root json value is not valid, failed to decorate.");
         return origin;
@@ -193,12 +192,13 @@ std::string HiSysEventJsonDecorator::DecorateEventJsonStr(const HiSysEventRecord
             origin.c_str());
         return origin;
     }
+    DecorateMarks decorateMarks;
     auto needDecorate = CheckEventDecorationNeed(eventJson,
-        [this] (const Json::Value& definedBase) {
+        [this, &decorateMarks] (const Json::Value& definedBase) {
             auto levelValidity = this->CheckLevelValidity(definedBase);
-            decoratedMarks_[LEVEL_] = levelValidity;
+            decorateMarks[LEVEL_] = levelValidity;
             return levelValidity != Validity::KV_BOTH_VALID;
-        }, [this] (const Json::Value& eventJson, const Json::Value& definedName) {
+        }, [this, &decorateMarks] (const Json::Value& eventJson, const Json::Value& definedName) {
                 auto attrList = eventJson.getMemberNames();
                 bool ret = false;
                 for (auto it = attrList.cbegin(); it != attrList.cend(); it++) {
@@ -207,7 +207,7 @@ std::string HiSysEventJsonDecorator::DecorateEventJsonStr(const HiSysEventRecord
                         [&ret, &eventJson, &key, &definedName] (const char* ele) {
                             return (key.compare(ele) == 0);
                         }) == std::cend(INNER_BUILD_KEYS)) {
-                        ret = this->CheckAttrDecorationNeed(eventJson, key, definedName) || ret;
+                        ret = this->CheckAttrDecorationNeed(eventJson, key, definedName, decorateMarks) || ret;
                     }
                 }
                 return ret;
@@ -217,10 +217,10 @@ std::string HiSysEventJsonDecorator::DecorateEventJsonStr(const HiSysEventRecord
         return origin;
     }
     HILOG_DEBUG(LOG_CORE, "all invalid key or value will be high-lighted with red color.");
-    return DecorateJsonStr(origin, decoratedMarks_);
+    return DecorateJsonStr(origin, decorateMarks);
 }
 
-std::string HiSysEventJsonDecorator::DecorateJsonStr(const std::string& origin, DecorateMarks marks)
+std::string HiSysEventJsonDecorator::DecorateJsonStr(const std::string& origin, const DecorateMarks& marks)
 {
     if (marks.empty()) {
         return origin;
